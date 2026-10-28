@@ -194,7 +194,7 @@ services:
       - ./default-config.env
       - ./.env
     environment:
-      - API_TYPE=fspiop
+      - API_TYPE=${API_TYPE:-fspiop}
       - ILP_VERSION=4
       - CACHE_URL=redis://redis:6379
       - ENABLE_OAUTH_TOKEN_ENDPOINT=false
@@ -219,10 +219,10 @@ services:
       - WSO2_BEARER_TOKEN=7718fa9b-be13-3fe7-87f0-a12cf1628168 # dummy value for SDK config
       - OAUTH_CLIENT_KEY=${AUTH_CLIENT_ID}
       - OAUTH_TOKEN_ENDPOINT=https://keycloak.${SWITCH_DOMAIN}${AUTH_OIDC_TOKEN_ROUTE:-/realms/dfsps/protocol/openid-connect/token}
-      - PEER_ENDPOINT=fspiop.${SWITCH_DOMAIN}
-      - ALS_ENDPOINT=fspiop.${SWITCH_DOMAIN}
-      - FX_QUOTES_ENDPOINT=fspiop.${SWITCH_DOMAIN}
-      - FX_TRANSFERS_ENPOINT=fspiop.${SWITCH_DOMAIN}
+      - PEER_ENDPOINT=${PEER_ENDPOINT:-fspiop.${SWITCH_DOMAIN}}
+      - ALS_ENDPOINT=${ALS_ENDPOINT:-fspiop.${SWITCH_DOMAIN}}
+      - FX_QUOTES_ENDPOINT=${FX_QUOTES_ENDPOINT:-fspiop.${SWITCH_DOMAIN}}
+      - FX_TRANSFERS_ENPOINT=${FX_TRANSFERS_ENPOINT:-fspiop.${SWITCH_DOMAIN}}
     ports:
       - "14000:4000"
     #   - "4001:4001"
