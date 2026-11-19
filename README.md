@@ -157,6 +157,23 @@ docker compose logs cert-check           # the last result
 docker compose ps cert-check             # healthy / unhealthy
 ```
 
+### Renewing or replacing the certificate by hand
+
+Renewal is automatic on your side; you can still start one yourself at any time
+(after a suspected key leak, before a planned change, or to rehearse the procedure):
+
+```bash
+docker compose exec management-api wget -qO- --header 'Content-Type: application/json' \
+  --post-data '{"reason":"<why>"}' http://127.0.0.1:9000/recreate/outboundTLS
+```
+
+The payment manager creates a new key and signing request and sends it to MCM;
+`cert-check` reports `renewal.pending`; ask the hub operator to sign it; the new
+certificate is installed within about two minutes, without a restart. The old one is
+not revoked and stays valid until it expires: tell the hub if the reason is a leaked
+key. `/recreate/JWS` does the same for the JWS signing key. The callback (server)
+certificate renews itself 2 days before it expires.
+
 Settings in `.env`: `CERT_WARN_DAYS` (14), `CERT_CHECK_INTERVAL_SECONDS` (21600).
 The hub watches the same thing on its side; the alert on yours is so that the
 person who can chase it, you, hears about it too.
