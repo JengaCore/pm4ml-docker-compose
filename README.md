@@ -145,7 +145,11 @@ reads, with your MCM credentials, what MCM holds for your DFSP, and logs one lin
 
 On anything but `cert.ok` the container turns **unhealthy** (`docker compose ps`,
 Portainer) and, if `ALERT_WEBHOOK_URL` is set in Vault (step 8), it posts the message
-there. Once the hub has signed, management-api installs the new certificate within
+there. If the check itself cannot run (`check.failed`: MCM or Keycloak unreachable, the
+client secret rejected), it says so once on the webhook, on the first failed run after
+a good one, and the container stays unhealthy until a run succeeds. Changing
+`AUTH_CLIENT_SECRET` or `ALERT_WEBHOOK_URL` in Vault needs no restart: the check reads
+them again before every run. Once the hub has signed, management-api installs the new certificate within
 a minute, without a restart.
 
 ```bash

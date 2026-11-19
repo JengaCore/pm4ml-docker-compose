@@ -261,6 +261,9 @@ services:
       - MCM_URL=https://mcm.${SWITCH_DOMAIN}/pm4mlapi
       - WARN_DAYS=${CERT_WARN_DAYS:-14}
       - CHECK_INTERVAL_SECONDS=${CERT_CHECK_INTERVAL_SECONDS:-21600}
+      # Read again before every run: a rotated AUTH_CLIENT_SECRET or a new
+      # ALERT_WEBHOOK_URL is picked up without a restart.
+      - SECRETS_ENV_FILE=/shared-secrets/app.env
     volumes:
       - ./docker/vault/wait-for-secrets.sh:/wait-for-secrets.sh:ro
       - ./docker/cert-check/pm4ml-cert-check.sh:/scripts/pm4ml-cert-check.sh:ro
@@ -270,7 +273,7 @@ services:
       - /tmp:size=1m
     user: "65534:65534"
     healthcheck:
-      test: ["CMD", "sh", "-c", "grep -qv attention /tmp/cert-status"]
+      test: ["CMD", "grep", "-qx", "ok", "/tmp/cert-status"]
       interval: 5m
       timeout: 10s
       start_period: 2m
