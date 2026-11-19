@@ -101,6 +101,13 @@ It is designed for **DFSPs (Digital Financial Service Providers)** who need a si
    docker compose exec vault-agent /vault/create-secrets.sh CC_TOKEN
    ```
 
+   Optional, recommended: where the certificate check posts its alerts, a
+   Slack-compatible incoming webhook URL (Slack, Mattermost, Rocket.Chat, a Teams
+   workflow). See [Certificate renewal](#certificate-renewal).
+   ```bash
+   docker compose exec vault-agent /vault/create-secrets.sh ALERT_WEBHOOK_URL
+   ```
+
    The script will prompt you to enter the secret value. All secrets are stored at `shared-secrets/pm4ml` in Vault.
 
 ### 9. Start Services
@@ -116,6 +123,60 @@ It is designed for **DFSPs (Digital Financial Service Providers)** who need a si
    - `--profile admin` (for portainer service for debugging purposes)
    - `--profile ttk` (for testing toolkit for testing purposes)
 
+
+## Certificate renewal
+
+The payment manager's client certificate, the one the switch checks on every
+payment you send, is signed by the hub in MCM. It expires (90 days on the
+sandbox). management-api asks MCM for a new one **7 days before** expiry, and
+then waits: **the hub operator has to sign it**, as for the first one, and MCM
+notifies nobody that a request is waiting. Unsigned at expiry, you can no longer
+send payments; you still receive them.
+
+The `cert-check` service (profile `pm4ml`) watches this for you. Every 6 hours it
+reads, with your MCM credentials, what MCM holds for your DFSP, and logs one line:
+
+| Event | Meaning | What to do |
+|---|---|---|
+| `cert.ok` | Signed, more than `CERT_WARN_DAYS` (14) left | Nothing |
+| `cert.expiring` | Fewer than 14 days left | The renewal request comes at 7 days; warn the hub it is coming |
+| `renewal.pending` | A renewal request waits for the hub's signature | **Tell the hub operator** through your agreed support channel, and ask them to sign it |
+| `cert.expired` | Expired: outgoing payments fail | Escalate to the hub operator now |
+
+On anything but `cert.ok` the container turns **unhealthy** (`docker compose ps`,
+Portainer) and, if `ALERT_WEBHOOK_URL` is set in Vault (step 8), it posts the message
+there. If the check itself cannot run (`check.failed`: MCM or Keycloak unreachable, the
+client secret rejected), it says so once on the webhook, on the first failed run after
+a good one, and the container stays unhealthy until a run succeeds. Changing
+`AUTH_CLIENT_SECRET` or `ALERT_WEBHOOK_URL` in Vault needs no restart: the check reads
+them again before every run. Once the hub has signed, management-api installs the new certificate within
+a minute, without a restart.
+
+```bash
+docker compose logs cert-check           # the last result
+docker compose ps cert-check             # healthy / unhealthy
+```
+
+### Renewing or replacing the certificate by hand
+
+Renewal is automatic on your side; you can still start one yourself at any time
+(after a suspected key leak, before a planned change, or to rehearse the procedure):
+
+```bash
+docker compose exec management-api wget -qO- --header 'Content-Type: application/json' \
+  --post-data '{"reason":"<why>"}' http://127.0.0.1:9000/recreate/outboundTLS
+```
+
+The payment manager creates a new key and signing request and sends it to MCM;
+`cert-check` reports `renewal.pending`; ask the hub operator to sign it; the new
+certificate is installed within about two minutes, without a restart. The old one is
+not revoked and stays valid until it expires: tell the hub if the reason is a leaked
+key. `/recreate/JWS` does the same for the JWS signing key. The callback (server)
+certificate renews itself 2 days before it expires.
+
+Settings in `.env`: `CERT_WARN_DAYS` (14), `CERT_CHECK_INTERVAL_SECONDS` (21600).
+The hub watches the same thing on its side; the alert on yours is so that the
+person who can chase it, you, hears about it too.
 
 ## Accessing Services
 

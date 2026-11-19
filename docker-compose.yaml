@@ -243,6 +243,44 @@ services:
     profiles:
       - pm4ml
 
+  # Watches the DFSP's client certificate, which the hub signs in MCM. management-api
+  # requests its renewal 7 days before expiry and MCM notifies nobody: unsigned at
+  # expiry, outgoing payments stop. This reads, with the DFSP's MCM credentials, what
+  # MCM holds for this DFSP every CERT_CHECK_INTERVAL_SECONDS, logs the result, turns
+  # the container unhealthy and posts to ALERT_WEBHOOK_URL (a Vault secret, optional)
+  # when a renewal waits for the hub's signature or the certificate expires within
+  # CERT_WARN_DAYS. See README, "Certificate renewal".
+  cert-check:
+    image: alpine/k8s:1.31.4        # sh, curl, jq
+    entrypoint: ["/wait-for-secrets.sh"]
+    command: ["sh", "/scripts/pm4ml-cert-check.sh"]
+    environment:
+      - DFSP_ID=${DFSP_ID}
+      - CLIENT_ID=${AUTH_CLIENT_ID}
+      - TOKEN_URL=https://keycloak.${SWITCH_DOMAIN}${AUTH_OIDC_TOKEN_ROUTE:-/realms/dfsps/protocol/openid-connect/token}
+      - MCM_URL=https://mcm.${SWITCH_DOMAIN}/pm4mlapi
+      - WARN_DAYS=${CERT_WARN_DAYS:-14}
+      - CHECK_INTERVAL_SECONDS=${CERT_CHECK_INTERVAL_SECONDS:-21600}
+      # Read again before every run: a rotated AUTH_CLIENT_SECRET or a new
+      # ALERT_WEBHOOK_URL is picked up without a restart.
+      - SECRETS_ENV_FILE=/shared-secrets/app.env
+    volumes:
+      - ./docker/vault/wait-for-secrets.sh:/wait-for-secrets.sh:ro
+      - ./docker/cert-check/pm4ml-cert-check.sh:/scripts/pm4ml-cert-check.sh:ro
+      - shared-secrets:/shared-secrets:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=1m
+    user: "65534:65534"
+    healthcheck:
+      test: ["CMD", "grep", "-qx", "ok", "/tmp/cert-status"]
+      interval: 5m
+      timeout: 10s
+      start_period: 2m
+    restart: unless-stopped
+    profiles:
+      - pm4ml
+
   vault:
     image: &VAULT_IMAGE vault:1.13.3
     container_name: vault
